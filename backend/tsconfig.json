@@ -1,0 +1,46 @@
+{
+  "compilerOptions": {
+    // ── File Layout ──────────────────────────────────────────────
+    "rootDir": "./src",
+    "outDir": "./dist",
+
+    // ── Environment Settings ─────────────────────────────────────
+    // "nodenext" = รองรับ ESM + CJS แบบ Node.js native
+    // ต้องใช้คู่กับ "type": "module" ใน package.json (ESM)
+    // หรือ "commonjs" ถ้าใช้ require/module.exports
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "target": "es2022",           // Node 18+ รองรับ ES2022 ได้เต็มที่
+    "lib": ["es2022"],
+    "types": ["node"],            // ใช้ @types/node เพื่อให้รู้จัก process, __dirname, Buffer ฯลฯ
+
+    // ── Other Outputs ─────────────────────────────────────────────
+    "sourceMap": true,            // debug ได้ใน .ts ตรง ๆ
+    "declaration": false,         // ไม่จำเป็นสำหรับ app (เปิดถ้าทำ library)
+    "declarationMap": false,
+
+    // ── Module Interop ────────────────────────────────────────────
+    "esModuleInterop": true,      // import defaultExport from 'cjs-module' ทำงานได้
+    "allowSyntheticDefaultImports": true,
+    "verbatimModuleSyntax": true, // บังคับใช้ import type / export type ให้ถูกต้อง
+    "isolatedModules": true,      // ป้องกัน pattern ที่ transpiler อื่น (esbuild) รองรับไม่ได้
+
+    // ── Strict Type Checking ──────────────────────────────────────
+    "strict": true,               // เปิด: strictNullChecks, noImplicitAny ฯลฯ
+    "noUncheckedIndexedAccess": true,   // arr[0] มี type เป็น T | undefined
+    "exactOptionalPropertyTypes": true, // ป้องกัน { a?: string } รับ undefined โดยตรง
+
+    // ── Style / Safety Options ────────────────────────────────────
+    "noImplicitReturns": true,    // ทุก code path ต้อง return
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,       // จับ variable ที่ประกาศแล้วไม่ใช้
+    "noUnusedParameters": true,   // จับ parameter ที่ไม่ใช้
+    "forceConsistentCasingInFileNames": true,
+
+    // ── Misc ──────────────────────────────────────────────────────
+    "moduleDetection": "force",
+    "skipLibCheck": true          // ข้ามการ type-check ใน node_modules
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
