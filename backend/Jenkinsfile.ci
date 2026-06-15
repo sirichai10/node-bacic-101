@@ -2,7 +2,7 @@ pipeline {
   agent any
 
   environment {
-    REGISTRY = "localhost:5000"
+    REGISTRY = "localhost:5001"
     IMAGE_NAME = "express-app"
     IMAGE_TAG = "${BUILD_NUMBER}"
   }
