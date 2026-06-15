@@ -19,6 +19,7 @@ services:
       retries: 5
 
   backend:
+    image: ${REGISTRY:-localhost:5001}/${IMAGE_NAME:-express-app}:${IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: Dockerfile
