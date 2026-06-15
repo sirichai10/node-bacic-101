@@ -2,14 +2,18 @@ version: '3.8'
 
 services:
   jenkins:
-    image: jenkins/jenkins:lts
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: jenkins
+    user: root
     restart: unless-stopped
     ports:
       - "8000:8080"   # Jenkins Web UI
       - "50000:50000" # Jenkins agent port (for JNLP agents)
     volumes:
       - jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - TZ=Asia/Bangkok
     networks:
@@ -20,7 +24,7 @@ services:
     container_name: docker-registry
     restart: always
     ports:
-      - "5000:5000"
+      - "5001:5000"
     volumes:
       - registry_data:/var/lib/registry
     networks:
