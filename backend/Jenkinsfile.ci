@@ -1,0 +1,39 @@
+pipeline {
+  agent any
+
+  environment {
+    REGISTRY = "localhost:5000"
+    IMAGE_NAME = "express-app"
+    IMAGE_TAG = "${BUILD_NUMBER}"
+  }
+
+  stages {
+    stage('Build Docker Image') {
+      steps {
+        script {
+          // สลับเข้าไปทำงานในโฟลเดอร์ backend
+          dir('backend') {
+            sh "docker build -t ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} ."
+            sh "docker tag ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} ${REGISTRY}/${IMAGE_NAME}:latest"
+          }
+        }
+      }
+    }
+
+    stage('Push to Local Registry') {
+      steps {
+        script {
+          sh "docker push ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+          sh "docker push ${REGISTRY}/${IMAGE_NAME}:latest"
+        }
+      }
+    }
+  }
+
+  post {
+    always {
+      // เคลียร์ image ขยะหรือ dangling images บนเครื่อง build ทุกครั้งหลังเสร็จงาน
+      sh "docker image prune -f"
+    }
+  }
+}
