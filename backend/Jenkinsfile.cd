@@ -3,6 +3,8 @@ pipeline {
 
   parameters {
     string(name: 'IMAGE_TAG', defaultValue: 'latest', description: 'Docker image tag to deploy')
+    booleanParam(name: 'ROLLBACK', defaultValue: false, description: 'Check this to execute manual rollback (skips deploy stages)')
+    string(name: 'ROLLBACK_TAG', defaultValue: 'latest', description: 'Docker image tag to rollback to')
   }
 
   environment {
@@ -18,6 +20,9 @@ pipeline {
 
   stages {
     stage('Pull Image') {
+      when {
+        expression { !params.ROLLBACK }
+      }
       steps {
         script {
           dir('backend') {
@@ -38,6 +43,9 @@ pipeline {
     }
 
     stage('Database Migration') {
+      when {
+        expression { !params.ROLLBACK }
+      }
       steps {
         script {
           dir('backend') {
@@ -50,6 +58,9 @@ pipeline {
     }
 
     stage('Deploy') {
+      when {
+        expression { !params.ROLLBACK }
+      }
       steps {
         script {
           dir('backend') {
@@ -61,6 +72,9 @@ pipeline {
     }
 
     stage('Verification') {
+      when {
+        expression { !params.ROLLBACK }
+      }
       steps {
         script {
           echo "Verifying deployment..."
@@ -68,6 +82,40 @@ pipeline {
           sleep 5
           // Simple health check endpoint test
           sh "curl -fsS http://localhost:8080/health"
+        }
+      }
+    }
+
+    stage('Rollback') {
+      when {
+        expression { params.ROLLBACK }
+      }
+      steps {
+        script {
+          dir('backend') {
+            echo "Performing manual rollback to tag: ${params.ROLLBACK_TAG}"
+            
+            // 1. ดึง Access Token จาก Metadata Server ของ GCE VM ผ่าน curl
+            def token = sh(
+              script: "curl -s -H 'Metadata-Flavor: Google' http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token | grep -o '\"access_token\":\"[^\"]*' | grep -o '[^\"]*\$'",
+              returnStdout: true
+            ).trim()
+            
+            // 2. ใช้ token ล็อกอินเข้า Docker registry ของ GCP
+            sh "echo '${token}' | docker login -u oauth2accesstoken --password-stdin https://asia-southeast3-docker.pkg.dev"
+
+            echo "Pulling rollback image: ${REGISTRY}/${IMAGE_NAME}:${params.ROLLBACK_TAG}"
+            sh "docker pull ${REGISTRY}/${IMAGE_NAME}:${params.ROLLBACK_TAG}"
+            
+            echo "Deploying rollback version with docker compose..."
+            sh "IMAGE_TAG=${params.ROLLBACK_TAG} docker compose up -d"
+            
+            echo "Verifying rollback deployment..."
+            sleep 5
+            sh "curl -fsS http://localhost:8080/health"
+            
+            echo "Rollback completed successfully."
+          }
         }
       }
     }
@@ -79,7 +127,13 @@ pipeline {
       sh "docker image prune -f"
     }
     success {
-      echo "CD Pipeline completed successfully. Deployed version: ${IMAGE_TAG}"
+      script {
+        if (params.ROLLBACK) {
+          echo "CD Rollback Pipeline completed successfully. Reverted to version: ${params.ROLLBACK_TAG}"
+        } else {
+          echo "CD Pipeline completed successfully. Deployed version: ${IMAGE_TAG}"
+        }
+      }
     }
     failure {
       echo "CD Pipeline failed. Please check logs for troubleshooting."
