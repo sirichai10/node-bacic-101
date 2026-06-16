@@ -6,7 +6,12 @@ pipeline {
   }
 
   environment {
-    REGISTRY = "localhost:5001"
+    // GAR registry
+    REGISTRY = "asia-southeast3-docker.pkg.dev/project-e9ca6f8a-355b-45a8-ba8/app-image-repo"
+
+    // local registry
+    // REGISTRY = "localhost:5001"
+
     IMAGE_NAME = "express-app"
     IMAGE_TAG = "${params.IMAGE_TAG}"
   }
@@ -16,6 +21,15 @@ pipeline {
       steps {
         script {
           dir('backend') {
+            // 1. ดึง Access Token จาก Metadata Server ของ GCE VM ผ่าน curl
+            def token = sh(
+              script: "curl -s -H 'Metadata-Flavor: Google' http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token | grep -o '\"access_token\":\"[^\"]*' | grep -o '[^\"]*\$'",
+              returnStdout: true
+            ).trim()
+            
+            // 2. ใช้ token ล็อกอินเข้า Docker registry ของ GCP
+            sh "echo '${token}' | docker login -u oauth2accesstoken --password-stdin https://asia-southeast3-docker.pkg.dev"
+
             echo "Pulling image: ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
             sh "docker pull ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
           }
