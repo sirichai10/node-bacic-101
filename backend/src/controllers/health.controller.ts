@@ -16,6 +16,7 @@ export const getHealth = async (
       dbMessage = dbErr instanceof Error ? dbErr.message : String(dbErr);
     }
 
+    // test ci
     res.status(dbStatus === "healthy" ? 200 : 500).json({
       success: dbStatus === "healthy",
       data: {
