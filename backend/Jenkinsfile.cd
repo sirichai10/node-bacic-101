@@ -120,8 +120,8 @@ pipeline {
                 returnStdout: true
               ).trim()
 
-              echo "1. Transferring docker-compose.yml and nginx configs to Production GCE VM..."
-              sh "scp -o StrictHostKeyChecking=no docker-compose.yml ${PROD_VM_USER}@${PROD_VM_IP}:${PROD_PATH}/docker-compose.yml"
+              echo "1. Transferring docker-compose configs and nginx configs to Production GCE VM..."
+              sh "scp -o StrictHostKeyChecking=no docker-compose.yml docker-compose.prod.yml ${PROD_VM_USER}@${PROD_VM_IP}:${PROD_PATH}/"
               sh "scp -o StrictHostKeyChecking=no -r nginx ${PROD_VM_USER}@${PROD_VM_IP}:${PROD_PATH}/"
 
               echo "2. Logging in and pulling image on Production GCE VM..."
@@ -132,7 +132,7 @@ pipeline {
                   export REGISTRY='${REGISTRY}'
                   export IMAGE_NAME='${IMAGE_NAME}'
                   export IMAGE_TAG='${IMAGE_TAG}'
-                  docker compose pull
+                  docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
                 "
               """
 
@@ -143,7 +143,7 @@ pipeline {
                   export REGISTRY='${REGISTRY}'
                   export IMAGE_NAME='${IMAGE_NAME}'
                   export IMAGE_TAG='${IMAGE_TAG}'
-                  docker compose run --rm backend npx prisma db push --accept-data-loss
+                  docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm backend npx prisma db push --accept-data-loss
                 "
               """
 
@@ -199,7 +199,7 @@ pipeline {
                 export REGISTRY='${REGISTRY}'
                 export IMAGE_NAME='${IMAGE_NAME}'
                 export IMAGE_TAG='${params.ROLLBACK_TAG}'
-                docker compose pull
+                docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
                 ./nginx/init-ssl.sh
               "
             """

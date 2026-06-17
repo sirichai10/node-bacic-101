@@ -17,17 +17,17 @@ if [ ! -f "docker-compose.yml" ]; then
 fi
 
 echo "=== Checking if SSL certificates already exist for $DOMAIN ==="
-docker compose run --rm --entrypoint "" certbot sh -c "[ -f /etc/letsencrypt/live/$DOMAIN/fullchain.pem ]"
+docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm --entrypoint "" certbot sh -c "[ -f /etc/letsencrypt/live/$DOMAIN/fullchain.pem ]"
 
 if [ $? -eq 0 ]; then
   echo "SSL certificates already exist for $DOMAIN. Starting all services normally..."
-  docker compose up -d
+  docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 else
   echo "SSL certificates not found. Starting bootstrap process..."
 
   # 1. Create a dummy self-signed certificate so Nginx doesn't crash on start
   echo "Creating dummy certificate for $DOMAIN..."
-  docker compose run --rm --entrypoint "" certbot sh -c "
+  docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm --entrypoint "" certbot sh -c "
     mkdir -p /etc/letsencrypt/live/$DOMAIN && \
     openssl req -x509 -nodes -newkey rsa:2048 -days 1 \
       -keyout /etc/letsencrypt/live/$DOMAIN/privkey.pem \
@@ -37,17 +37,17 @@ else
 
   # 2. Start Nginx
   echo "Starting Nginx..."
-  docker compose up -d nginx
+  docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d nginx
 
   # 3. Delete the dummy certificate
   echo "Deleting dummy certificate..."
-  docker compose run --rm --entrypoint "" certbot sh -c "
+  docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm --entrypoint "" certbot sh -c "
     rm -rf /etc/letsencrypt/live/$DOMAIN/*
   "
 
   # 4. Request the real certificate from Let's Encrypt
   echo "Requesting real Let's Encrypt certificate for $DOMAIN..."
-  docker compose run --rm certbot certonly \
+  docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm certbot certonly \
     --webroot \
     --webroot-path=/var/www/certbot \
     -d $DOMAIN \
@@ -58,11 +58,11 @@ else
 
   # 5. Reload Nginx to load the new certificate
   echo "Reloading Nginx config..."
-  docker compose exec nginx nginx -s reload
+  docker compose -f docker-compose.yml -f docker-compose.prod.yml exec nginx nginx -s reload
 
   # 6. Start the rest of the services (backend, db, certbot daemon)
   echo "Starting all remaining services..."
-  docker compose up -d
+  docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
   echo "=== SSL bootstrapping completed successfully! ==="
 fi
