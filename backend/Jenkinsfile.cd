@@ -16,6 +16,12 @@ pipeline {
 
     IMAGE_NAME = "express-app"
     IMAGE_TAG = "${params.IMAGE_TAG}"
+
+    // GCE VM Production Environment Config
+    PROD_SSH_CREDENTIAL_ID = 'gcp-prod-ssh-key'
+    PROD_VM_USER = 'prasoppolsirichai'
+    PROD_VM_IP = '34.143.249.238'
+    PROD_PATH = '/home/prasoppolsirichai/deploy-app/node-app'
   }
 
   stages {
@@ -42,14 +48,14 @@ pipeline {
       }
     }
 
-    stage('Database Migration') {
+    stage('Database Migration Develop') {
       when {
         expression { !params.ROLLBACK }
       }
       steps {
         script {
           dir('backend') {
-            echo "Running database migrations using Prisma..."
+            echo "Running database migrations on Develop..."
             // Run Prisma db push inside a temporary container to sync schema
             sh "IMAGE_TAG=${IMAGE_TAG} docker compose run --rm backend npx prisma db push --accept-data-loss"
           }
@@ -57,31 +63,116 @@ pipeline {
       }
     }
 
-    stage('Deploy') {
+    stage('Deploy Develop') {
       when {
         expression { !params.ROLLBACK }
       }
       steps {
         script {
           dir('backend') {
-            echo "Starting/restarting services with docker compose..."
+            echo "Starting/restarting Develop services with docker compose..."
             sh "IMAGE_TAG=${IMAGE_TAG} docker compose up -d"
           }
         }
       }
     }
 
-    stage('Verification') {
+    stage('Verification Develop') {
       when {
         expression { !params.ROLLBACK }
       }
       steps {
         script {
-          echo "Verifying deployment..."
+          echo "Verifying Develop deployment..."
           // Wait a few seconds for container startup
           sleep 5
           // Simple health check endpoint test
           sh "curl -fsS http://localhost:8080/health"
+        }
+      }
+    }
+
+    stage('Approval Gate') {
+      when {
+        expression { !params.ROLLBACK }
+      }
+      options {
+        timeout(time: 10, unit: 'MINUTES')
+      }
+      steps {
+        script {
+          input message: 'Approve deployment to Production?', ok: 'Deploy to Prod'
+        }
+      }
+    }
+
+    stage('Deploy Production') {
+      when {
+        expression { !params.ROLLBACK }
+      }
+      steps {
+        sshagent(credentials: [PROD_SSH_CREDENTIAL_ID]) {
+          script {
+            dir('backend') {
+              // ดึง Access Token จาก Metadata Server ของ GCE VM เพื่อส่งไปใช้ล็อกอินในเครื่องปลายทาง
+              def token = sh(
+                script: "curl -s -H 'Metadata-Flavor: Google' http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token | grep -o '\"access_token\":\"[^\"]*' | grep -o '[^\"]*\$'",
+                returnStdout: true
+              ).trim()
+
+              echo "1. Transferring docker-compose.yml to Production GCE VM..."
+              sh "scp -o StrictHostKeyChecking=no docker-compose.yml ${PROD_VM_USER}@${PROD_VM_IP}:${PROD_PATH}/docker-compose.yml"
+
+              echo "2. Logging in and pulling image on Production GCE VM..."
+              sh """
+                ssh -o StrictHostKeyChecking=no ${PROD_VM_USER}@${PROD_VM_IP} "
+                  echo '${token}' | docker login -u oauth2accesstoken --password-stdin https://asia-southeast3-docker.pkg.dev
+                  cd ${PROD_PATH}
+                  export REGISTRY='${REGISTRY}'
+                  export IMAGE_NAME='${IMAGE_NAME}'
+                  export IMAGE_TAG='${IMAGE_TAG}'
+                  docker compose pull
+                "
+              """
+
+              echo "3. Running database migrations on Production GCE VM..."
+              sh """
+                ssh -o StrictHostKeyChecking=no ${PROD_VM_USER}@${PROD_VM_IP} "
+                  cd ${PROD_PATH}
+                  export REGISTRY='${REGISTRY}'
+                  export IMAGE_NAME='${IMAGE_NAME}'
+                  export IMAGE_TAG='${IMAGE_TAG}'
+                  docker compose run --rm backend npx prisma db push --accept-data-loss
+                "
+              """
+
+              echo "4. Starting Production services with docker compose..."
+              sh """
+                ssh -o StrictHostKeyChecking=no ${PROD_VM_USER}@${PROD_VM_IP} "
+                  cd ${PROD_PATH}
+                  export REGISTRY='${REGISTRY}'
+                  export IMAGE_NAME='${IMAGE_NAME}'
+                  export IMAGE_TAG='${IMAGE_TAG}'
+                  docker compose up -d
+                "
+              """
+            }
+          }
+        }
+      }
+    }
+
+    stage('Verification Production') {
+      when {
+        expression { !params.ROLLBACK }
+      }
+      steps {
+        script {
+          echo "Verifying Production deployment..."
+          // Wait a few seconds for container startup
+          sleep 10
+          // Health check Production VM
+          sh "curl -fsS http://${PROD_VM_IP}:8080/health"
         }
       }
     }
@@ -91,28 +182,30 @@ pipeline {
         expression { params.ROLLBACK }
       }
       steps {
-        script {
-          dir('backend') {
-            echo "Performing manual rollback to tag: ${params.ROLLBACK_TAG}"
+        sshagent(credentials: [PROD_SSH_CREDENTIAL_ID]) {
+          script {
+            echo "Performing manual rollback on Production to tag: ${params.ROLLBACK_TAG}"
             
-            // 1. ดึง Access Token จาก Metadata Server ของ GCE VM ผ่าน curl
             def token = sh(
               script: "curl -s -H 'Metadata-Flavor: Google' http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token | grep -o '\"access_token\":\"[^\"]*' | grep -o '[^\"]*\$'",
               returnStdout: true
             ).trim()
             
-            // 2. ใช้ token ล็อกอินเข้า Docker registry ของ GCP
-            sh "echo '${token}' | docker login -u oauth2accesstoken --password-stdin https://asia-southeast3-docker.pkg.dev"
-
-            echo "Pulling rollback image: ${REGISTRY}/${IMAGE_NAME}:${params.ROLLBACK_TAG}"
-            sh "docker pull ${REGISTRY}/${IMAGE_NAME}:${params.ROLLBACK_TAG}"
+            sh """
+              ssh -o StrictHostKeyChecking=no ${PROD_VM_USER}@${PROD_VM_IP} "
+                echo '${token}' | docker login -u oauth2accesstoken --password-stdin https://asia-southeast3-docker.pkg.dev
+                cd ${PROD_PATH}
+                export REGISTRY='${REGISTRY}'
+                export IMAGE_NAME='${IMAGE_NAME}'
+                export IMAGE_TAG='${params.ROLLBACK_TAG}'
+                docker compose pull
+                docker compose up -d
+              "
+            """
             
-            echo "Deploying rollback version with docker compose..."
-            sh "IMAGE_TAG=${params.ROLLBACK_TAG} docker compose up -d"
-            
-            echo "Verifying rollback deployment..."
-            sleep 5
-            sh "curl -fsS http://localhost:8080/health"
+            echo "Verifying rollback deployment on Production..."
+            sleep 10
+            sh "curl -fsS http://${PROD_VM_IP}:8080/health"
             
             echo "Rollback completed successfully."
           }
