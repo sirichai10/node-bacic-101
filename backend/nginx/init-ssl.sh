@@ -47,7 +47,7 @@ else
 
   # 4. Request the real certificate from Let's Encrypt
   echo "Requesting real Let's Encrypt certificate for $DOMAIN..."
-  docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm certbot certonly \
+  docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm --entrypoint certbot certbot certonly \
     --webroot \
     --webroot-path=/var/www/certbot \
     -d $DOMAIN \
