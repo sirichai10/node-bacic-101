@@ -6,7 +6,7 @@
 
 ## 1. System Architecture Overview (ภาพรวมสถาปัตยกรรม)
 
-ระบบ CI/CD นี้ขับเคลื่อนด้วย Jenkins ที่ทำงานบน Docker Container ร่วมกับ Local Registry สำหรับการพัฒนาในพื้นที่ และเชื่อมต่อไปยัง Google Cloud Artifact Registry (GAR) สำหรับการ Deploy ขึ้น Production VM
+ระบบ CI/CD นี้ขับเคลื่อนด้วย Jenkins ที่ทำงานบน Docker Container และเชื่อมต่อไปยัง Google Cloud Artifact Registry (GAR) สำหรับการ Build และ Deploy ขึ้น Production VM
 
 ```mermaid
 graph TD

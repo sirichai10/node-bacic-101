@@ -10,7 +10,6 @@ services:
     restart: unless-stopped
     ports:
       - "8000:8080"   # Jenkins Web UI
-      - "50000:50000" # Jenkins agent port (for JNLP agents)
     volumes:
       - jenkins_home:/var/jenkins_home
       - /var/run/docker.sock:/var/run/docker.sock
@@ -19,22 +18,9 @@ services:
     networks:
       - jenkins-net
 
-  registry:
-    image: registry:2
-    container_name: docker-registry
-    restart: always
-    ports:
-      - "5001:5000"
-    volumes:
-      - registry_data:/var/lib/registry
-    networks:
-      - jenkins-net
-
 volumes:
   jenkins_home:
     name: jenkins_home
-  registry_data:
-    name: registry_data
 
 networks:
   jenkins-net:
