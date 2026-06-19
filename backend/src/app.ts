@@ -19,7 +19,6 @@ app.use(
 
 // Body parsers
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
 // Use request logging and correlation ID middleware
 app.use(loggingMiddleware);
