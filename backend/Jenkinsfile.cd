@@ -20,7 +20,7 @@ pipeline {
     // GCE VM Production Environment Config
     PROD_SSH_CREDENTIAL_ID = 'gcp-prod-ssh-key'
     PROD_VM_USER = 'prasoppolsirichai'
-    PROD_VM_IP = '34.143.249.238'
+    PROD_VM_IP = '35.240.149.66'
     PROD_PATH = '/home/prasoppolsirichai/deploy-app/node-app'
   }
 
